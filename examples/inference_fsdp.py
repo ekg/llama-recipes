@@ -14,6 +14,9 @@ from transformers import LlamaTokenizer
 from llama_recipes.inference.safety_utils import get_safety_checker
 from llama_recipes.inference.model_utils import load_model, load_peft_model
 
+import torch.distributed as dist
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+
 
 def main(
     model_name,
@@ -54,11 +57,13 @@ def main(
     torch.manual_seed(seed)
     
     model = load_model(model_name, quantization)
-    print(f"Model device: {next(model.parameters()).device}")
     if peft_model:
         model = load_peft_model(model, peft_model)
 
-    model.eval()
+    dist.init_process_group(backend='nccl')
+    model = load_model(model_name, quantization)
+    model = FSDP(model)
+    model.eval()        
     
     if use_fast_kernels:
         """
